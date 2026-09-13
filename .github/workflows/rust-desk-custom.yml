@@ -2,6 +2,9 @@ name: Rust Desk Custom Build
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - rust-desk-v1
 
 permissions:
   contents: read
