@@ -85,7 +85,7 @@ def make_parser():
         "-m",
         "--manufacturer",
         type=str,
-        default="Rust Desk",
+        default="RD Connect",
         help="The app manufacturer.",
     )
     return parser

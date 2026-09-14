@@ -41,6 +41,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:vector_math/vector_math.dart' show Vector2;
 
 import '../common.dart';
+import '../rd_connect_license.dart';
 import '../utils/image.dart' as img;
 import '../common/widgets/dialog.dart';
 import 'input_model.dart';
@@ -3786,6 +3787,11 @@ class FFI {
     }
 
     final isNewPeer = tabWindowId == null;
+    if (isNewPeer && isDesktop && !isWeb && !rdConnectSessionAllowed()) {
+      BotToast.showText(
+          contentColor: Colors.red, text: rdConnectSessionBlockReason());
+      return;
+    }
     // If tabWindowId != null, this session is a "tab -> window" one.
     // Else this session is a new one.
     if (isNewPeer) {

@@ -1,6 +1,6 @@
-# Rust Desk Attribution
+# RD Connect Attribution
 
-Rust Desk is a branded build based on the open-source RustDesk client.
+RD Connect is a branded build based on the open-source RustDesk client.
 
 Upstream project: https://github.com/rustdesk/rustdesk
 License: GNU Affero General Public License v3.0 (AGPL-3.0)

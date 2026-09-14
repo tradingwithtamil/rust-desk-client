@@ -19,6 +19,7 @@ import 'package:flutter_hbb/models/server_model.dart';
 import 'package:flutter_hbb/models/state_model.dart';
 import 'package:flutter_hbb/plugin/manager.dart';
 import 'package:flutter_hbb/plugin/widgets/desktop_settings.dart';
+import 'package:flutter_hbb/utils/http_service.dart' as rd_http;
 import 'package:get/get.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -26,6 +27,7 @@ import 'package:url_launcher/url_launcher_string.dart';
 
 import '../../common/widgets/dialog.dart';
 import '../../common/widgets/login.dart';
+import '../../rd_connect_license.dart';
 
 const double _kTabWidth = 200;
 const double _kTabHeight = 42;
@@ -2071,15 +2073,223 @@ class _Account extends StatefulWidget {
 }
 
 class _AccountState extends State<_Account> {
+  static const _licenseStatusKey = 'rd-connect-license-status';
+  static const _licensePlanKey = 'rd-connect-license-plan';
+  static const _licenseExpiryKey = 'rd-connect-license-expiry';
+  static const _licenseMaxDevicesKey = 'rd-connect-license-max-devices';
+  static const _licenseLast4Key = 'rd-connect-license-last4';
+  static const _licenseActivatedAtKey = 'rd-connect-license-activated-at';
+
+  final TextEditingController _licenseController = TextEditingController();
+  bool _activating = false;
+  String _licenseMessage = '';
+  bool _licenseError = false;
+
+  @override
+  void initState() {
+    super.initState();
+    Future(() async {
+      await refreshRdConnectEntitlement();
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _licenseController.dispose();
+    super.dispose();
+  }
+
+  String _local(String key) => bind.mainGetLocalOption(key: key);
+
+  Future<void> _saveLocal(String key, String value) async {
+    await bind.mainSetLocalOption(key: key, value: value);
+  }
+
+  String get _status => _local(_licenseStatusKey);
+  String get _plan => _local(_licensePlanKey);
+  String get _expiry => _local(_licenseExpiryKey);
+  String get _maxDevices => _local(_licenseMaxDevicesKey);
+  String get _last4 => _local(_licenseLast4Key);
+  String get _activatedAt => _local(_licenseActivatedAtKey);
+  String get _daysRemaining => _local(rdLicenseDaysRemainingKey);
+
+  String _expiryLabel() {
+    if (_status != 'active' && _status != 'trial')
+      return _status == 'expired' ? 'Expired' : 'Not activated';
+    if (_expiry.isEmpty) return 'Lifetime / Never expires';
+    final dt = DateTime.tryParse(_expiry);
+    if (dt == null) return _expiry;
+    return dt.toLocal().toString().split('.').first;
+  }
+
+  Future<void> _activateLicense() async {
+    final key = _licenseController.text.trim().toUpperCase();
+    if (key.isEmpty) {
+      setState(() {
+        _licenseError = true;
+        _licenseMessage = 'Enter a license key.';
+      });
+      return;
+    }
+    setState(() {
+      _activating = true;
+      _licenseError = false;
+      _licenseMessage = 'Activating…';
+    });
+    try {
+      final uuid = await bind.mainGetUuid();
+      final remoteId = await bind.mainGetMyId();
+      final body = jsonEncode({
+        'licenseKey': key,
+        'fingerprint': uuid,
+        'remoteId': remoteId,
+        'hostname': Platform.localHostname,
+      });
+      rd_http.Response? response;
+      Object? lastNetworkError;
+      for (final base in const [
+        'https://rdconnect.forextamil.com',
+        'https://rustdesk.forextamil.com',
+      ]) {
+        try {
+          response = await rd_http.post(
+            Uri.parse('$base/api/activate'),
+            headers: {'Content-Type': 'application/json'},
+            body: body,
+          );
+          break;
+        } catch (e) {
+          lastNetworkError = e;
+        }
+      }
+      if (response == null) {
+        throw Exception('Activation server unavailable: $lastNetworkError');
+      }
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      if (response.statusCode < 200 ||
+          response.statusCode >= 300 ||
+          data['ok'] != true) {
+        throw Exception(data['error'] ?? 'Activation failed');
+      }
+      final license = (data['license'] as Map?)?.cast<String, dynamic>() ?? {};
+      await _saveLocal(_licenseStatusKey, 'active');
+      await _saveLocal(_licensePlanKey, '${license['plan'] ?? ''}');
+      await _saveLocal(_licenseExpiryKey, '${license['expiresAt'] ?? ''}');
+      await _saveLocal(_licenseMaxDevicesKey, '${license['maxDevices'] ?? ''}');
+      await _saveLocal(_licenseLast4Key,
+          key.length >= 4 ? key.substring(key.length - 4) : key);
+      await _saveLocal(
+          _licenseActivatedAtKey, DateTime.now().toUtc().toIso8601String());
+      _licenseController.clear();
+      setState(() {
+        _licenseError = false;
+        _licenseMessage = 'License activated successfully.';
+      });
+    } catch (e) {
+      final msg = e.toString().replaceFirst('Exception: ', '');
+      setState(() {
+        _licenseError = true;
+        _licenseMessage = msg;
+      });
+    } finally {
+      if (mounted) setState(() => _activating = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final scrollController = ScrollController();
     return ListView(
       controller: scrollController,
       children: [
+        _Card(title: 'License', children: [licenseCard()]),
         _Card(title: 'Account', children: [accountAction(), useInfo()]),
       ],
     ).marginOnly(bottom: _kListViewBottomMargin);
+  }
+
+  Widget licenseCard() {
+    final active = _status == 'active' || _status == 'trial';
+    final trial = _status == 'trial';
+    final expired = _status == 'expired';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: active
+                ? Colors.green.withOpacity(0.10)
+                : Theme.of(context).colorScheme.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                  trial
+                      ? 'Trial Active'
+                      : (active
+                          ? 'Active'
+                          : (expired ? 'Trial Expired' : 'Not activated')),
+                  style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: active
+                          ? Colors.green
+                          : (expired ? Colors.redAccent : null))),
+              const SizedBox(height: 8),
+              Text(
+                  'Plan: ${trial ? '90-Day Trial' : (active ? (_plan.isEmpty ? 'Active' : _plan) : (expired ? '90-Day Trial' : '-'))}'),
+              Text('Expiry: ${_expiryLabel()}'),
+              if (trial && _daysRemaining.isNotEmpty)
+                Text('Days remaining: $_daysRemaining'),
+              if (trial) const Text('Sessions: Unlimited during trial'),
+              if (active && !trial && _maxDevices.isNotEmpty)
+                Text('Device limit: $_maxDevices'),
+              if (active && !trial && _last4.isNotEmpty)
+                Text('License: ••••-$_last4'),
+              if (active && _activatedAt.isNotEmpty)
+                Text(
+                    'Activated: ${DateTime.tryParse(_activatedAt)?.toLocal().toString().split('.').first ?? _activatedAt}'),
+            ],
+          ),
+        ).marginOnly(left: _kContentHMargin, right: _kContentHMargin),
+        const SizedBox(height: 14),
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _licenseController,
+                enabled: !_activating,
+                textCapitalization: TextCapitalization.characters,
+                decoration: const InputDecoration(
+                  labelText: 'Activate License Key',
+                  hintText: 'RDS-XXXX-XXXX-XXXX-XXXX',
+                  border: OutlineInputBorder(),
+                ),
+                onSubmitted: (_) {
+                  if (!_activating) _activateLicense();
+                },
+              ),
+            ),
+            const SizedBox(width: 10),
+            ElevatedButton(
+              onPressed: _activating ? null : _activateLicense,
+              child: Text(_activating ? 'Activating…' : 'Activate'),
+            ),
+          ],
+        ).marginOnly(left: _kContentHMargin, right: _kContentHMargin),
+        if (_licenseMessage.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(left: _kContentHMargin, top: 8),
+            child: Text(_licenseMessage,
+                style: TextStyle(
+                    color: _licenseError ? Colors.redAccent : Colors.green)),
+          ),
+      ],
+    );
   }
 
   Widget accountAction() {
@@ -2146,7 +2356,6 @@ class _AccountState extends State<_Account> {
   }
 
   Widget? _buildUserAvatar() {
-    // Resolve relative avatar path at display time
     final avatar =
         bind.mainResolveAvatarUrl(avatar: gFFI.userModel.avatar.value);
     return buildAvatarWidget(
@@ -2429,7 +2638,7 @@ class _AboutState extends State<_About> {
       final scrollController = ScrollController();
       return SingleChildScrollView(
         controller: scrollController,
-        child: _Card(title: 'About Rust Desk', children: [
+        child: _Card(title: 'About RD Connect', children: [
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -2448,7 +2657,8 @@ class _AboutState extends State<_About> {
                         .marginSymmetric(vertical: 4.0)),
               InkWell(
                   onTap: () {
-                    launchUrlString('https://github.com/tradingwithtamil/rust-desk-client');
+                    launchUrlString(
+                        'https://github.com/tradingwithtamil/rust-desk-client');
                   },
                   child: Text(
                     'Source Code (AGPL-3.0)',
@@ -2456,7 +2666,7 @@ class _AboutState extends State<_About> {
                   ).marginSymmetric(vertical: 4.0)),
               InkWell(
                   onTap: () {
-                    launchUrlString('https://rustdesk.forextamil.com/');
+                    launchUrlString('https://rdconnect.forextamil.com/');
                   },
                   child: Text(
                     translate('Website'),
@@ -2474,7 +2684,7 @@ class _AboutState extends State<_About> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Rust Desk • Private Remote Desktop\nBased on RustDesk • GNU AGPL-3.0\n$license',
+                            'RD Connect • Private Remote Desktop\nBased on RustDesk • GNU AGPL-3.0\n$license',
                             style: const TextStyle(color: Colors.white),
                           ),
                           Text(

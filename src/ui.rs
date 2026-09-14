@@ -535,7 +535,7 @@ impl UI {
     }
 
     fn get_app_name(&self) -> String {
-        get_app_name()
+        "RD Connect".to_owned()
     }
 
     fn get_software_ext(&self) -> String {

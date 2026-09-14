@@ -939,7 +939,7 @@ pub fn is_modifier(evt: &KeyEvent) -> bool {
 }
 
 pub fn check_software_update() {
-    // Rust Desk releases are managed by the companion updater.
+    // RD Connect releases are managed by the companion updater.
 }
 
 #[tokio::main(flavor = "current_thread")]
