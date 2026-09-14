@@ -41,8 +41,35 @@ String rdConnectSessionBlockReason() {
   return 'RD Connect requires an active trial or license. Open Settings > Account.';
 }
 
+Future<void> refreshRdConnectServerConfig() async {
+  for (final base in const [
+    'https://rdconnect.forextamil.com',
+    'https://rustdesk.forextamil.com',
+  ]) {
+    try {
+      final response = await rd_http
+          .get(Uri.parse('$base/api/config'))
+          .timeout(const Duration(seconds: 8));
+      if (response.statusCode < 200 || response.statusCode >= 300) continue;
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      if (data['ok'] != true) continue;
+      final relayHost = '${data['relayHost'] ?? ''}'.trim();
+      final relayKey = '${data['relayKey'] ?? ''}'.trim();
+      if (relayHost.isEmpty) continue;
+      await bind.mainSetOption(
+          key: 'custom-rendezvous-server', value: relayHost);
+      await bind.mainSetOption(key: 'relay-server', value: relayHost);
+      if (relayKey.isNotEmpty) {
+        await bind.mainSetOption(key: 'key', value: relayKey);
+      }
+      return;
+    } catch (_) {}
+  }
+}
+
 Future<bool> refreshRdConnectEntitlement() async {
   try {
+    await refreshRdConnectServerConfig();
     final uuid = await bind.mainGetUuid();
     final remoteId = await bind.mainGetMyId();
     final body = jsonEncode({

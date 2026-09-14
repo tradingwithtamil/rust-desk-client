@@ -3787,7 +3787,7 @@ class FFI {
     }
 
     final isNewPeer = tabWindowId == null;
-    if (isNewPeer && isDesktop && !isWeb && !rdConnectSessionAllowed()) {
+    if (isNewPeer && !isWeb && !rdConnectSessionAllowed()) {
       BotToast.showText(
           contentColor: Colors.red, text: rdConnectSessionBlockReason());
       return;
