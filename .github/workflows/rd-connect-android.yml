@@ -2,6 +2,11 @@ name: RD Connect Android v1.6 arm64
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - rust-desk-v1
+    paths:
+      - .github/workflows/rd-connect-android.yml
 
 env:
   RUST_VERSION: "1.75"
