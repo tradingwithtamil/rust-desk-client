@@ -2377,6 +2377,7 @@ class _AccountState extends State<_Account> {
               if (trial && _daysRemaining.isNotEmpty)
                 Text('Days remaining: $_daysRemaining'),
               if (trial) const Text('Sessions: Unlimited during trial'),
+              if (expired) const Text('Free mode: 1 hour per session'),
               if (active && !trial && _maxDevices.isNotEmpty)
                 Text('Device limit: $_maxDevices'),
               if (active && !trial && _last4.isNotEmpty)

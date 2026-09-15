@@ -12,6 +12,7 @@ const rdLicenseLast4Key = 'rd-connect-license-last4';
 const rdLicenseActivatedAtKey = 'rd-connect-license-activated-at';
 const rdLicenseDaysRemainingKey = 'rd-connect-license-days-remaining';
 const rdUnlimitedSessionsKey = 'rd-connect-unlimited-sessions';
+const rdFreeSessionMinutesKey = 'rd-connect-free-session-minutes';
 const rdLicenseDeviceTokenKey = 'rd-connect-device-token';
 const rdMasterPasswordUpdatedAtKey = 'rd-connect-master-password-updated-at';
 
@@ -30,13 +31,31 @@ Future<bool> applyRdConnectMasterPassword(String password) async {
   return ok;
 }
 
+bool _rdConnectTrialExpiredNow() {
+  if (_local(rdLicensePlanKey) != 'trial') return false;
+  final expiry = DateTime.tryParse(_local(rdLicenseExpiryKey))?.toUtc();
+  return expiry != null && !expiry.isAfter(DateTime.now().toUtc());
+}
+
+int rdConnectSessionLimitMinutes() {
+  final status = _local(rdLicenseStatusKey);
+  final postTrial = _local(rdLicensePlanKey) == 'trial' &&
+      (status == 'expired' || _rdConnectTrialExpiredNow());
+  if (!postTrial) return 0;
+  final configured = int.tryParse(_local(rdFreeSessionMinutesKey)) ?? 60;
+  return configured > 0 ? configured : 60;
+}
+
 bool rdConnectSessionAllowed() {
   final status = _local(rdLicenseStatusKey);
-  if (status != 'active' && status != 'trial') return false;
-  final expiry = _local(rdLicenseExpiryKey);
-  if (expiry.isEmpty) return status == 'active';
-  final dt = DateTime.tryParse(expiry)?.toUtc();
-  return dt != null && dt.isAfter(DateTime.now().toUtc());
+  if (status == 'active') return true;
+  if (status == 'trial') {
+    return !_rdConnectTrialExpiredNow() || rdConnectSessionLimitMinutes() > 0;
+  }
+  if (status == 'expired' && _local(rdLicensePlanKey) == 'trial') {
+    return rdConnectSessionLimitMinutes() > 0;
+  }
+  return false;
 }
 
 String rdConnectSessionBlockReason() {
@@ -145,8 +164,10 @@ Future<bool> refreshRdConnectEntitlement() async {
       await _save(rdLicenseLast4Key, '');
       await _save(rdLicenseActivatedAtKey, '${e['startedAt'] ?? ''}');
       await _save(rdLicenseDaysRemainingKey, '${e['daysRemaining'] ?? '0'}');
-      await _save(rdUnlimitedSessionsKey, 'Y');
-      return active;
+      final freeMinutes = '${e['freeSessionMinutes'] ?? (active ? 0 : 60)}';
+      await _save(rdFreeSessionMinutesKey, freeMinutes);
+      await _save(rdUnlimitedSessionsKey, active ? 'Y' : 'N');
+      return active || (int.tryParse(freeMinutes) ?? 0) > 0;
     }
   } catch (_) {}
   return rdConnectSessionAllowed();

@@ -19,6 +19,7 @@ import '../../models/input_model.dart';
 import '../../models/platform_model.dart';
 import '../../common/shared_state.dart';
 import '../../utils/image.dart';
+import '../../rd_connect_license.dart';
 import '../widgets/remote_toolbar.dart';
 import '../widgets/kb_layout_type_chooser.dart';
 import '../widgets/tabbar_widget.dart';
@@ -78,6 +79,9 @@ class _RemotePageState extends State<RemotePage>
         MultiWindowListener,
         TickerProviderStateMixin {
   Timer? _timer;
+  Timer? _rdFreeWarn5Timer;
+  Timer? _rdFreeWarn1Timer;
+  Timer? _rdFreeEndTimer;
   String keyboardMode = "legacy";
   bool _isWindowBlur = false;
   final _cursorOverImage = false.obs;
@@ -141,6 +145,7 @@ class _RemotePageState extends State<RemotePage>
       display: widget.display,
       displays: widget.displays,
     );
+    _startRdConnectFreeSessionLimit();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       SystemChrome.setEnabledSystemUIMode(SystemUiMode.manual, overlays: []);
       _ffi.dialogManager
@@ -190,6 +195,32 @@ class _RemotePageState extends State<RemotePage>
     if (_ffi.ffiModel.pi.isSet.value) {
       unawaited(_normalizeWaylandKeyboardModeIfNeeded());
     }
+  }
+
+  void _startRdConnectFreeSessionLimit() {
+    final minutes = rdConnectSessionLimitMinutes();
+    if (minutes <= 0) return;
+    if (minutes > 5) {
+      _rdFreeWarn5Timer = Timer(Duration(minutes: minutes - 5), () {
+        if (mounted)
+          showToast(
+              'Free session ends in 5 minutes. Activate a license for unlimited access.');
+      });
+    }
+    if (minutes > 1) {
+      _rdFreeWarn1Timer = Timer(Duration(minutes: minutes - 1), () {
+        if (mounted)
+          showToast(
+              'Free session ends in 1 minute. Activate a license for unlimited access.');
+      });
+    }
+    _rdFreeEndTimer = Timer(Duration(minutes: minutes), () {
+      if (!mounted) return;
+      showToast(
+          'Free 1-hour session ended. Activate a license for unlimited access.');
+      unawaited(bind.sessionClose(sessionId: sessionId));
+      closeConnection(id: widget.id);
+    });
   }
 
   Future<void> _normalizeWaylandKeyboardModeIfNeeded() async {
@@ -382,6 +413,9 @@ class _RemotePageState extends State<RemotePage>
     }
     await _ffi.close(closeSession: closeSession);
     _timer?.cancel();
+    _rdFreeWarn5Timer?.cancel();
+    _rdFreeWarn1Timer?.cancel();
+    _rdFreeEndTimer?.cancel();
     _ffi.dialogManager.dismissAll();
     if (closeSession) {
       await SystemChrome.setEnabledSystemUIMode(SystemUiMode.manual,

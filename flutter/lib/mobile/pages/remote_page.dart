@@ -22,6 +22,7 @@ import '../../models/input_model.dart';
 import '../../models/model.dart';
 import '../../models/platform_model.dart';
 import '../../utils/image.dart';
+import '../../rd_connect_license.dart';
 import '../widgets/dialog.dart';
 import '../widgets/custom_scale_widget.dart';
 
@@ -60,6 +61,9 @@ class RemotePage extends StatefulWidget {
 
 class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   Timer? _timer;
+  Timer? _rdFreeWarn5Timer;
+  Timer? _rdFreeWarn1Timer;
+  Timer? _rdFreeEndTimer;
   bool _showBar = !isWebDesktop;
   bool _showGestureHelp = false;
   String _value = '';
@@ -100,6 +104,7 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
       isSharedPassword: widget.isSharedPassword,
       forceRelay: widget.forceRelay,
     );
+    _startRdConnectFreeSessionLimit();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       SystemChrome.setEnabledSystemUIMode(SystemUiMode.manual, overlays: []);
       gFFI.dialogManager
@@ -140,6 +145,32 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     }
   }
 
+  void _startRdConnectFreeSessionLimit() {
+    final minutes = rdConnectSessionLimitMinutes();
+    if (minutes <= 0) return;
+    if (minutes > 5) {
+      _rdFreeWarn5Timer = Timer(Duration(minutes: minutes - 5), () {
+        if (mounted)
+          showToast(
+              'Free session ends in 5 minutes. Activate a license for unlimited access.');
+      });
+    }
+    if (minutes > 1) {
+      _rdFreeWarn1Timer = Timer(Duration(minutes: minutes - 1), () {
+        if (mounted)
+          showToast(
+              'Free session ends in 1 minute. Activate a license for unlimited access.');
+      });
+    }
+    _rdFreeEndTimer = Timer(Duration(minutes: minutes), () {
+      if (!mounted) return;
+      showToast(
+          'Free 1-hour session ended. Activate a license for unlimited access.');
+      unawaited(bind.sessionClose(sessionId: sessionId));
+      closeConnection();
+    });
+  }
+
   @override
   Future<void> dispose() async {
     WidgetsBinding.instance.removeObserver(this);
@@ -165,6 +196,9 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
     inputModel.keyboardInputAllowed = true;
     await gFFI.close();
     _timer?.cancel();
+    _rdFreeWarn5Timer?.cancel();
+    _rdFreeWarn1Timer?.cancel();
+    _rdFreeEndTimer?.cancel();
     _iosKeyboardWorkaroundTimer?.cancel();
     gFFI.dialogManager.dismissAll();
     await SystemChrome.setEnabledSystemUIMode(SystemUiMode.manual,
