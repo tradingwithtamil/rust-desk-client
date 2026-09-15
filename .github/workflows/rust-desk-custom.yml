@@ -16,7 +16,7 @@ env:
   FLUTTER_VERSION: "3.24.5"
   VCPKG_COMMIT_ID: "120deac3062162151622ca4860575a33844ba10b"
   VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
-  VERSION: "1.4.9-rd1"
+  VERSION: "1.6.6"
 
 jobs:
   generate-bridge:
@@ -104,13 +104,24 @@ jobs:
           python3 ./generate.py -f ../../rustdesk/ -o . -e ../../rustdesk/rustdesk.exe
           Pop-Location
           New-Item -ItemType Directory -Force -Path ./dist | Out-Null
-          Move-Item ./target/release/rustdesk-portable-packer.exe ./dist/RustDesk-Windows-Custom-${{ env.VERSION }}.exe
-          Get-FileHash ./dist/RustDesk-Windows-Custom-${{ env.VERSION }}.exe -Algorithm SHA256
+          Move-Item ./target/release/rustdesk-portable-packer.exe ./dist/RD-Connect-Windows-Portable-v${{ env.VERSION }}.exe
+          Get-FileHash ./dist/RD-Connect-Windows-Portable-v${{ env.VERSION }}.exe -Algorithm SHA256
+      - name: Package full RD Connect release
+        shell: pwsh
+        run: |
+          Copy-Item ./rustdesk ./rdconnect-stage -Recurse -Force
+          if (Test-Path ./rdconnect-stage/rustdesk.exe) {
+            Rename-Item ./rdconnect-stage/rustdesk.exe RDConnect.exe -Force
+          }
+          Compress-Archive -Path ./rdconnect-stage/* -DestinationPath ./dist/RD-Connect-Windows-v${{ env.VERSION }}.zip -Force
+          Get-FileHash ./dist/RD-Connect-Windows-v${{ env.VERSION }}.zip -Algorithm SHA256
       - name: Upload Windows build
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: rust-desk-windows-x64
-          path: dist/RustDesk-Windows-Custom-${{ env.VERSION }}.exe
+          name: rd-connect-windows-x64
+          path: |
+            dist/RD-Connect-Windows-Portable-v${{ env.VERSION }}.exe
+            dist/RD-Connect-Windows-v${{ env.VERSION }}.zip
 
   build-macos:
     name: macOS ${{ matrix.arch }}

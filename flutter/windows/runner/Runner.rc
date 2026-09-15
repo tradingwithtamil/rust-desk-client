@@ -92,9 +92,9 @@ BEGIN
             VALUE "CompanyName", "RD Connect" "\0"
             VALUE "FileDescription", "RD Connect Remote Desktop" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "rustdesk" "\0"
+            VALUE "InternalName", "RDConnect" "\0"
             VALUE "LegalCopyright", "RD Connect custom client; based on RustDesk (AGPL-3.0)." "\0"
-            VALUE "OriginalFilename", "rustdesk.exe" "\0"
+            VALUE "OriginalFilename", "RDConnect.exe" "\0"
             VALUE "ProductName", "RD Connect" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END

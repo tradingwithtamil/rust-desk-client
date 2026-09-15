@@ -1,6 +1,6 @@
 [package]
 name = "rustdesk"
-version = "1.4.9"
+version = "1.6.6"
 authors = ["rustdesk <info@rustdesk.com>"]
 edition = "2021"
 build= "build.rs"
@@ -213,7 +213,7 @@ libxdo-sys = { path = "libs/libxdo-sys-stub" }
 LegalCopyright = "RD Connect custom client; based on RustDesk, licensed under AGPL-3.0."
 ProductName = "RD Connect"
 FileDescription = "RD Connect Remote Desktop"
-OriginalFilename = "rustdesk.exe"
+OriginalFilename = "RDConnect.exe"
 
 [target.'cfg(target_os="windows")'.build-dependencies]
 winres = "0.1"

@@ -466,14 +466,22 @@ class _DesktopHomePageState extends State<DesktopHomePage>
             "", bind.isOutgoingOnly() ? "" : "install_tip", "Install",
             () async {
           await rustDeskWinManager.closeAllSubWindows();
-          bind.mainGotoInstall();
+          await launchUrl(
+            Uri.parse(
+                'https://rdconnect.forextamil.com/downloads/RD-Connect-Windows-latest.exe'),
+            mode: LaunchMode.externalApplication,
+          );
         });
       } else if (bind.mainIsInstalledLowerVersion()) {
         return buildInstallCard(
             "Status", "Your installation is lower version.", "Click to upgrade",
             () async {
           await rustDeskWinManager.closeAllSubWindows();
-          bind.mainUpdateMe();
+          await launchUrl(
+            Uri.parse(
+                'https://rdconnect.forextamil.com/downloads/RD-Connect-Windows-latest.exe'),
+            mode: LaunchMode.externalApplication,
+          );
         });
       }
     } else if (isMacOS) {
