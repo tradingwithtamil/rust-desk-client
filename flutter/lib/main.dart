@@ -30,6 +30,7 @@ import 'mobile/pages/server_page.dart';
 import 'mobile/widgets/deploy_dialog.dart';
 import 'models/platform_model.dart';
 import 'rd_connect_license.dart';
+import 'rd_connect_update.dart';
 
 import 'package:flutter_hbb/plugin/handlers.dart'
     if (dart.library.html) 'package:flutter_hbb/web/plugin/handlers.dart';
@@ -116,6 +117,9 @@ Future<void> main(List<String> args) async {
     windowManager.setPreventClose(true);
     if (isMacOS) {
       disableWindowMovable(kWindowId);
+    }
+    if (isMacOS) {
+      unawaited(ensureRdConnectMacAutoUpdater());
     }
     runMainApp(true);
   }

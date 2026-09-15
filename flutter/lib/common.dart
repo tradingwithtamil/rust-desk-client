@@ -4069,21 +4069,55 @@ void earlyAssert() {
   assert('\1' == '1');
 }
 
-void checkUpdate() {
-  if (!isWeb) {
-    if (!bind.isCustomClient()) {
-      platformFFI.registerEventHandler(
-          kCheckSoftwareUpdateFinish, kCheckSoftwareUpdateFinish,
-          (Map<String, dynamic> evt) async {
-        if (evt['url'] is String) {
-          stateGlobal.updateUrl.value = evt['url'];
-        }
-      });
-      Timer(const Duration(seconds: 1), () async {
-        bind.mainGetSoftwareUpdateUrl();
-      });
-    }
+bool _rdConnectVersionGreater(String latest, String current) {
+  List<int> parts(String v) => v.split('.').map((e) => int.tryParse(e.replaceAll(RegExp(r'[^0-9].*'), '')) ?? 0).toList();
+  final a = parts(latest);
+  final b = parts(current);
+  for (var i = 0; i < 4; i++) {
+    final x = i < a.length ? a[i] : 0;
+    final y = i < b.length ? b[i] : 0;
+    if (x != y) return x > y;
   }
+  return false;
+}
+
+void checkUpdate() {
+  if (isWeb) return;
+  if (bind.isCustomClient()) {
+    Timer(const Duration(seconds: 1), () async {
+      try {
+        final res = await http.get(Uri.parse('https://rdconnect.forextamil.com/api/config'));
+        if (res.statusCode != 200) return;
+        final data = jsonDecode(res.body) as Map<String, dynamic>;
+        String latest = '';
+        String url = '';
+        if (isAndroid) {
+          latest = '${data['androidVersion'] ?? ''}';
+          url = '${data['androidUpdateUrl'] ?? ''}';
+        } else if (isWindows) {
+          latest = '${data['windowsVersion'] ?? ''}';
+          url = '${data['windowsUpdateUrl'] ?? ''}';
+        } else if (isMacOS) {
+          latest = '${data['macVersion'] ?? ''}';
+          url = '${data['macUpdateUrl'] ?? ''}';
+        }
+        if (latest.isNotEmpty && url.isNotEmpty && _rdConnectVersionGreater(latest, version)) {
+          stateGlobal.updateUrl.value = url;
+        }
+      } catch (_) {}
+    });
+    return;
+  }
+  platformFFI.registerEventHandler(
+      kCheckSoftwareUpdateFinish, kCheckSoftwareUpdateFinish,
+      (Map<String, dynamic> evt) async {
+    if (evt['url'] is String) {
+      stateGlobal.updateUrl.value = evt['url'];
+    }
+  });
+  Timer(const Duration(seconds: 1), () async {
+    bind.mainGetSoftwareUpdateUrl();
+  });
 }
 
 // https://github.com/flutter/flutter/issues/153560#issuecomment-2497160535
