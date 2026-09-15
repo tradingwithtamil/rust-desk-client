@@ -83,6 +83,11 @@ protobuf {
 
 android {
     compileSdkVersion 34
+    packagingOptions {
+        jniLibs {
+            useLegacyPackaging true
+        }
+    }
     sourceSets {
         main.java.srcDirs += 'src/main/kotlin'
 
@@ -97,7 +102,7 @@ android {
 
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId "com.forextamil.rdconnect"
+        applicationId "com.forextamil.rdconnect.controller"
         minSdkVersion 22
         targetSdkVersion 33
         versionCode flutterVersionCode.toInteger()
