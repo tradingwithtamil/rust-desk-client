@@ -388,6 +388,12 @@ class _DesktopTabState extends State<DesktopTab>
   void onWindowMinimize() {
     stateGlobal.setMinimized(true);
     stateGlobal.setMaximized(false);
+    if (isMainWindow) {
+      Future.delayed(Duration.zero, () async {
+        await windowManager.hide();
+        stateGlobal.setMinimized(false);
+      });
+    }
     super.onWindowMinimize();
   }
 
@@ -777,7 +783,8 @@ class WindowActionPanelState extends State<WindowActionPanel> {
                   icon: IconFont.min,
                   onTap: () {
                     if (widget.isMainWindow) {
-                      windowManager.minimize();
+                      // Main window minimizes into the RD Connect system tray.
+                      windowManager.hide();
                     } else {
                       WindowController.fromWindowId(kWindowId!).minimize();
                     }

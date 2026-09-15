@@ -28,6 +28,7 @@ import 'package:url_launcher/url_launcher_string.dart';
 import '../../common/widgets/dialog.dart';
 import '../../common/widgets/login.dart';
 import '../../rd_connect_license.dart';
+import '../../rd_connect_update.dart';
 
 const double _kTabWidth = 200;
 const double _kTabHeight = 42;
@@ -2788,6 +2789,44 @@ class _About extends StatefulWidget {
 }
 
 class _AboutState extends State<_About> {
+  bool _checkingSoftwareUpdate = false;
+
+  Future<void> _softwareUpdate() async {
+    if (_checkingSoftwareUpdate) return;
+    setState(() => _checkingSoftwareUpdate = true);
+    try {
+      final info = await checkRdConnectUpdateNow(version);
+      if (!mounted) return;
+      if (!info.updateAvailable) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content:
+              Text('RD Connect v${info.currentVersion} is the latest version.'),
+        ));
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Updating RD Connect to v${info.latestVersion}...'),
+        duration: const Duration(seconds: 4),
+      ));
+      await installRdConnectUpdate(info);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(isMacOS
+            ? 'RD Connect v${info.latestVersion} installed. Restart RD Connect to use the new version.'
+            : 'RD Connect v${info.latestVersion} updater started.'),
+        duration: const Duration(seconds: 8),
+      ));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Software Update failed: $e'),
+        duration: const Duration(seconds: 8),
+      ));
+    } finally {
+      if (mounted) setState(() => _checkingSoftwareUpdate = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return futureBuilder(future: () async {
@@ -2823,6 +2862,22 @@ class _AboutState extends State<_About> {
               SelectionArea(
                   child: Text('${translate('Build Date')}: $buildDate')
                       .marginSymmetric(vertical: 4.0)),
+              Padding(
+                padding: const EdgeInsets.only(top: 8.0, bottom: 8.0),
+                child: ElevatedButton.icon(
+                  onPressed: _checkingSoftwareUpdate ? null : _softwareUpdate,
+                  icon: _checkingSoftwareUpdate
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.system_update_alt, size: 18),
+                  label: Text(_checkingSoftwareUpdate
+                      ? 'Checking for Update...'
+                      : 'Software Update'),
+                ),
+              ),
               if (!isWeb)
                 SelectionArea(
                     child: Text('${translate('Fingerprint')}: $fingerprint')

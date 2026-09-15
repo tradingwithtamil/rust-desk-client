@@ -1,4 +1,8 @@
+import 'dart:convert';
 import 'dart:io';
+
+import 'package:crypto/crypto.dart';
+import 'package:http/http.dart' as http;
 
 Future<void> ensureRdConnectMacAutoUpdater() async {
   if (!Platform.isMacOS) return;
@@ -52,7 +56,8 @@ exit 0
     }
     final agentDir = Directory('$home/Library/LaunchAgents');
     await agentDir.create(recursive: true);
-    final plist = File('${agentDir.path}/com.forextamil.rdconnect.updater.plist');
+    final plist =
+        File('${agentDir.path}/com.forextamil.rdconnect.updater.plist');
     final escaped = script.path
         .replaceAll('&', '&amp;')
         .replaceAll('<', '&lt;')
@@ -72,10 +77,8 @@ exit 0
     final id = await Process.run('/usr/bin/id', ['-u']);
     final uid = id.stdout.toString().trim();
     if (uid.isNotEmpty) {
-      await Process.run('/bin/launchctl', [
-        'bootout',
-        'gui/$uid/com.forextamil.rdconnect.updater'
-      ]);
+      await Process.run('/bin/launchctl',
+          ['bootout', 'gui/$uid/com.forextamil.rdconnect.updater']);
       await Process.run('/bin/launchctl', [
         'bootstrap',
         'gui/$uid',
@@ -85,4 +88,120 @@ exit 0
   } catch (_) {
     // Updater setup must never block RD Connect startup.
   }
+}
+
+class RdConnectUpdateInfo {
+  const RdConnectUpdateInfo({
+    required this.currentVersion,
+    required this.latestVersion,
+    required this.updateUrl,
+    required this.updateSha256,
+    required this.updateAvailable,
+  });
+
+  final String currentVersion;
+  final String latestVersion;
+  final String updateUrl;
+  final String updateSha256;
+  final bool updateAvailable;
+}
+
+bool _rdConnectVersionGreater(String latest, String current) {
+  List<int> parts(String value) => value
+      .split('.')
+      .map(
+          (part) => int.tryParse(part.replaceAll(RegExp(r'[^0-9].*'), '')) ?? 0)
+      .toList();
+  final a = parts(latest);
+  final b = parts(current);
+  for (var i = 0; i < 4; i++) {
+    final x = i < a.length ? a[i] : 0;
+    final y = i < b.length ? b[i] : 0;
+    if (x != y) return x > y;
+  }
+  return false;
+}
+
+Future<RdConnectUpdateInfo> checkRdConnectUpdateNow(
+    String currentVersion) async {
+  final response = await http
+      .get(Uri.parse('https://rdconnect.forextamil.com/api/config'))
+      .timeout(const Duration(seconds: 20));
+  if (response.statusCode != 200) {
+    throw HttpException('Update server returned HTTP ${response.statusCode}.');
+  }
+  final data = jsonDecode(response.body) as Map<String, dynamic>;
+  String latest = '';
+  String url = '';
+  String expectedSha256 = '';
+  if (Platform.isWindows) {
+    latest = '${data['windowsVersion'] ?? ''}'.trim();
+    url = '${data['windowsUpdateUrl'] ?? ''}'.trim();
+    expectedSha256 =
+        '${data['windowsUpdateSha256'] ?? ''}'.trim().toLowerCase();
+  } else if (Platform.isMacOS) {
+    latest = '${data['macVersion'] ?? ''}'.trim();
+    url = '${data['macUpdateUrl'] ?? ''}'.trim();
+    expectedSha256 = '${data['macUpdateSha256'] ?? ''}'.trim().toLowerCase();
+  } else {
+    throw UnsupportedError(
+        'Software Update is supported on Windows and macOS.');
+  }
+  if (latest.isEmpty || url.isEmpty || expectedSha256.isEmpty) {
+    throw const FormatException('Update metadata is incomplete.');
+  }
+  return RdConnectUpdateInfo(
+    currentVersion: currentVersion,
+    latestVersion: latest,
+    updateUrl: url,
+    updateSha256: expectedSha256,
+    updateAvailable: _rdConnectVersionGreater(latest, currentVersion),
+  );
+}
+
+Future<void> installRdConnectUpdate(RdConnectUpdateInfo update) async {
+  if (!update.updateAvailable) return;
+  if (Platform.isWindows) {
+    final temp = File(
+        '${Directory.systemTemp.path}\\RD-Connect-Update-${update.latestVersion}.exe');
+    final request = await HttpClient().getUrl(Uri.parse(update.updateUrl));
+    final response = await request.close().timeout(const Duration(minutes: 2));
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw HttpException(
+          'Update download returned HTTP ${response.statusCode}.');
+    }
+    final sink = temp.openWrite();
+    await response.pipe(sink);
+    if (!await temp.exists() || await temp.length() < 32 * 1024) {
+      throw const FileSystemException('Downloaded updater is incomplete.');
+    }
+    final downloadedSha256 =
+        sha256.convert(await temp.readAsBytes()).toString();
+    if (downloadedSha256 != update.updateSha256) {
+      throw const FileSystemException(
+          'Downloaded updater SHA-256 verification failed.');
+    }
+    await Process.start(temp.path, const [], mode: ProcessStartMode.detached);
+    return;
+  }
+  if (Platform.isMacOS) {
+    await ensureRdConnectMacAutoUpdater();
+    final home = Platform.environment['HOME'];
+    if (home == null || home.isEmpty) {
+      throw const FileSystemException('Unable to locate the user home folder.');
+    }
+    final script = '$home/Library/Application Support/RDConnect/updater.sh';
+    final result = await Process.run('/bin/zsh', [script]);
+    if (result.exitCode != 0) {
+      throw ProcessException(
+          '/bin/zsh', [script], '${result.stderr}'.trim(), result.exitCode);
+    }
+    await Process.start(
+      '/bin/zsh',
+      ['-c', 'sleep 2; /usr/bin/open "/Applications/RD Connect.app"'],
+      mode: ProcessStartMode.detached,
+    );
+    exit(0);
+  }
+  throw UnsupportedError('Software Update is supported on Windows and macOS.');
 }
