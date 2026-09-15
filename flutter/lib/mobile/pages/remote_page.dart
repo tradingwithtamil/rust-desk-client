@@ -61,6 +61,7 @@ class RemotePage extends StatefulWidget {
 
 class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
   Timer? _timer;
+  Timer? _rdConnectConnectionWatchdog;
   Timer? _rdFreeWarn5Timer;
   Timer? _rdFreeWarn1Timer;
   Timer? _rdFreeEndTimer;
@@ -104,6 +105,13 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
       isSharedPassword: widget.isSharedPassword,
       forceRelay: widget.forceRelay,
     );
+    _rdConnectConnectionWatchdog?.cancel();
+    _rdConnectConnectionWatchdog = Timer(const Duration(seconds: 60), () {
+      if (!mounted || !gFFI.ffiModel.waitForFirstImage.value) return;
+      unawaited(bind.sessionClose(sessionId: sessionId));
+      showToast('Connection timed out. Please retry.');
+      closeConnection();
+    });
     _startRdConnectFreeSessionLimit();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       SystemChrome.setEnabledSystemUIMode(SystemUiMode.manual, overlays: []);
@@ -120,6 +128,8 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
         .changeCurrentKey(MessageKey(widget.id, ChatModel.clientModeID));
     _blockableOverlayState.applyFfi(gFFI);
     gFFI.imageModel.addCallbackOnFirstImage((String peerId) {
+      _rdConnectConnectionWatchdog?.cancel();
+      _rdConnectConnectionWatchdog = null;
       gFFI.recordingModel
           .updateStatus(bind.sessionGetIsRecording(sessionId: gFFI.sessionId));
       if (gFFI.recordingModel.start) {
@@ -173,6 +183,8 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
 
   @override
   Future<void> dispose() async {
+    _rdConnectConnectionWatchdog?.cancel();
+    _rdConnectConnectionWatchdog = null;
     WidgetsBinding.instance.removeObserver(this);
     // Close the session up-front. `gFFI.close()` below only calls `sessionClose`
     // after several awaits (canvas save, image update, the `enable_soft_keyboard`

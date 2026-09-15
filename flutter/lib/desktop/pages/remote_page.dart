@@ -79,6 +79,7 @@ class _RemotePageState extends State<RemotePage>
         MultiWindowListener,
         TickerProviderStateMixin {
   Timer? _timer;
+  Timer? _rdConnectConnectionWatchdog;
   Timer? _rdFreeWarn5Timer;
   Timer? _rdFreeWarn1Timer;
   Timer? _rdFreeEndTimer;
@@ -128,6 +129,8 @@ class _RemotePageState extends State<RemotePage>
     _ffi = FFI(widget.sessionId);
     Get.put<FFI>(_ffi, tag: widget.id);
     _ffi.imageModel.addCallbackOnFirstImage((String peerId) {
+      _rdConnectConnectionWatchdog?.cancel();
+      _rdConnectConnectionWatchdog = null;
       _ffi.canvasModel.activateLocalCursor();
       showKBLayoutTypeChooserIfNeeded(
           _ffi.ffiModel.pi.platform, _ffi.dialogManager);
@@ -145,6 +148,13 @@ class _RemotePageState extends State<RemotePage>
       display: widget.display,
       displays: widget.displays,
     );
+    _rdConnectConnectionWatchdog?.cancel();
+    _rdConnectConnectionWatchdog = Timer(const Duration(seconds: 60), () {
+      if (!mounted || !_ffi.ffiModel.waitForFirstImage.value) return;
+      unawaited(bind.sessionClose(sessionId: sessionId));
+      showToast('Connection timed out. Please retry.');
+      closeConnection(id: widget.id);
+    });
     _startRdConnectFreeSessionLimit();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       SystemChrome.setEnabledSystemUIMode(SystemUiMode.manual, overlays: []);
@@ -383,6 +393,13 @@ class _RemotePageState extends State<RemotePage>
   @override
   Future<void> dispose() async {
     final closeSession = closeSessionOnDispose.remove(widget.id) ?? true;
+    _rdConnectConnectionWatchdog?.cancel();
+    _rdConnectConnectionWatchdog = null;
+    if (closeSession) {
+      // Tear the native session down immediately before async UI cleanup.
+      // This prevents reconnects from attaching to a leaked/stale session.
+      unawaited(bind.sessionClose(sessionId: sessionId));
+    }
 
     // https://github.com/flutter/flutter/issues/64935
     super.dispose();
