@@ -2081,9 +2081,15 @@ class _AccountState extends State<_Account> {
   static const _licenseActivatedAtKey = 'rd-connect-license-activated-at';
 
   final TextEditingController _licenseController = TextEditingController();
+  final TextEditingController _masterPasswordController =
+      TextEditingController();
   bool _activating = false;
+  bool _masterBusy = false;
+  bool _masterVisible = false;
   String _licenseMessage = '';
+  String _masterMessage = '';
   bool _licenseError = false;
+  bool _masterError = false;
 
   @override
   void initState() {
@@ -2097,6 +2103,7 @@ class _AccountState extends State<_Account> {
   @override
   void dispose() {
     _licenseController.dispose();
+    _masterPasswordController.dispose();
     super.dispose();
   }
 
@@ -2121,6 +2128,114 @@ class _AccountState extends State<_Account> {
     final dt = DateTime.tryParse(_expiry);
     if (dt == null) return _expiry;
     return dt.toLocal().toString().split('.').first;
+  }
+
+  Future<Map<String, dynamic>> _masterPasswordRequest(
+      {String? newPassword}) async {
+    final uuid = await bind.mainGetUuid();
+    final token = _local(rdLicenseDeviceTokenKey);
+    if (token.isEmpty) {
+      throw Exception(
+          'Re-enter the license key once to enable Master Password sync on this device.');
+    }
+    final body = jsonEncode({
+      'fingerprint': uuid,
+      'deviceToken': token,
+      'hostname': Platform.localHostname,
+      if (newPassword != null) 'newPassword': newPassword,
+    });
+    rd_http.Response? response;
+    Object? lastNetworkError;
+    for (final base in const [
+      'https://rdconnect.forextamil.com',
+      'https://rustdesk.forextamil.com',
+    ]) {
+      try {
+        response = await rd_http.post(
+          Uri.parse('$base/api/master-password'),
+          headers: {'Content-Type': 'application/json'},
+          body: body,
+        );
+        break;
+      } catch (e) {
+        lastNetworkError = e;
+      }
+    }
+    if (response == null) {
+      throw Exception('Master Password server unavailable: $lastNetworkError');
+    }
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    if (response.statusCode < 200 ||
+        response.statusCode >= 300 ||
+        data['ok'] != true) {
+      throw Exception(data['error'] ?? 'Master Password request failed');
+    }
+    return data;
+  }
+
+  Future<void> _showMasterPassword() async {
+    if (_masterPasswordController.text.isNotEmpty) {
+      setState(() => _masterVisible = !_masterVisible);
+      return;
+    }
+    setState(() {
+      _masterBusy = true;
+      _masterError = false;
+      _masterMessage = 'Loading…';
+    });
+    try {
+      final data = await _masterPasswordRequest();
+      final password = '${data['masterPassword'] ?? ''}';
+      _masterPasswordController.text = password;
+      if (password.isNotEmpty) await applyRdConnectMasterPassword(password);
+      setState(() {
+        _masterVisible = true;
+        _masterMessage = 'Master Password synced.';
+      });
+    } catch (e) {
+      setState(() {
+        _masterError = true;
+        _masterMessage = e.toString().replaceFirst('Exception: ', '');
+      });
+    } finally {
+      if (mounted) setState(() => _masterBusy = false);
+    }
+  }
+
+  Future<void> _changeMasterPassword() async {
+    final password = _masterPasswordController.text.trim();
+    if (password.isEmpty) {
+      setState(() {
+        _masterError = true;
+        _masterMessage = 'Enter a new Master Password.';
+      });
+      return;
+    }
+    setState(() {
+      _masterBusy = true;
+      _masterError = false;
+      _masterMessage = 'Updating…';
+    });
+    try {
+      final data = await _masterPasswordRequest(newPassword: password);
+      final applied = await applyRdConnectMasterPassword(password);
+      if (!applied)
+        throw Exception(
+            'Password saved on server but this host could not apply it.');
+      await _saveLocal(
+          rdMasterPasswordUpdatedAtKey, '${data['updatedAt'] ?? ''}');
+      setState(() {
+        _masterMessage =
+            'Master Password updated for this license. Other hosts sync on next refresh.';
+      });
+    } catch (e) {
+      setState(() {
+        _masterError = true;
+        _masterMessage = e.toString().replaceFirst('Exception: ', '');
+      });
+    } finally {
+      if (mounted) setState(() => _masterBusy = false);
+    }
   }
 
   Future<void> _activateLicense() async {
@@ -2173,6 +2288,21 @@ class _AccountState extends State<_Account> {
         throw Exception(data['error'] ?? 'Activation failed');
       }
       final license = (data['license'] as Map?)?.cast<String, dynamic>() ?? {};
+      final device = (data['device'] as Map?)?.cast<String, dynamic>() ?? {};
+      final deviceToken = '${device['token'] ?? ''}';
+      final masterPassword = '${data['masterPassword'] ?? ''}';
+      if (deviceToken.isNotEmpty && deviceToken != 'null') {
+        await _saveLocal(rdLicenseDeviceTokenKey, deviceToken);
+      }
+      if (masterPassword.isNotEmpty && masterPassword != 'null') {
+        final applied = await applyRdConnectMasterPassword(masterPassword);
+        if (!applied)
+          throw Exception(
+              'License activated, but Master Password could not be applied on this host.');
+        _masterPasswordController.text = masterPassword;
+      }
+      await _saveLocal(rdMasterPasswordUpdatedAtKey,
+          '${data['masterPasswordUpdatedAt'] ?? ''}');
       await _saveLocal(_licenseStatusKey, 'active');
       await _saveLocal(_licensePlanKey, '${license['plan'] ?? ''}');
       await _saveLocal(_licenseExpiryKey, '${license['expiresAt'] ?? ''}');
@@ -2184,7 +2314,8 @@ class _AccountState extends State<_Account> {
       _licenseController.clear();
       setState(() {
         _licenseError = false;
-        _licenseMessage = 'License activated successfully.';
+        _licenseMessage =
+            'License activated successfully. Master Password synced.';
       });
     } catch (e) {
       final msg = e.toString().replaceFirst('Exception: ', '');
@@ -2264,8 +2395,10 @@ class _AccountState extends State<_Account> {
                 controller: _licenseController,
                 enabled: !_activating,
                 textCapitalization: TextCapitalization.characters,
-                decoration: const InputDecoration(
-                  labelText: 'Activate License Key',
+                decoration: InputDecoration(
+                  labelText: active && !trial
+                      ? 'Replace / Re-activate License Key'
+                      : 'Activate License Key',
                   hintText: 'RDS-XXXX-XXXX-XXXX-XXXX',
                   border: OutlineInputBorder(),
                 ),
@@ -2277,10 +2410,48 @@ class _AccountState extends State<_Account> {
             const SizedBox(width: 10),
             ElevatedButton(
               onPressed: _activating ? null : _activateLicense,
-              child: Text(_activating ? 'Activating…' : 'Activate'),
+              child: Text(_activating
+                  ? 'Activating…'
+                  : (active && !trial ? 'Replace / Activate' : 'Activate')),
             ),
           ],
         ).marginOnly(left: _kContentHMargin, right: _kContentHMargin),
+        if (active && !trial) ...[
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _masterPasswordController,
+                  enabled: !_masterBusy,
+                  obscureText: !_masterVisible,
+                  decoration: const InputDecoration(
+                    labelText: 'Master Password',
+                    hintText: 'Same password for every device on this license',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              OutlinedButton(
+                onPressed: _masterBusy ? null : _showMasterPassword,
+                child: Text(_masterVisible ? 'Hide' : 'Show'),
+              ),
+              const SizedBox(width: 8),
+              ElevatedButton(
+                onPressed: _masterBusy ? null : _changeMasterPassword,
+                child: Text(_masterBusy ? 'Please wait…' : 'Change'),
+              ),
+            ],
+          ).marginOnly(left: _kContentHMargin, right: _kContentHMargin),
+          if (_masterMessage.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(left: _kContentHMargin, top: 8),
+              child: Text(_masterMessage,
+                  style: TextStyle(
+                      color: _masterError ? Colors.redAccent : Colors.green)),
+            ),
+        ],
         if (_licenseMessage.isNotEmpty)
           Padding(
             padding: const EdgeInsets.only(left: _kContentHMargin, top: 8),

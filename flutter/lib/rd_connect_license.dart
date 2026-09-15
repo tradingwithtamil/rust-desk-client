@@ -12,10 +12,23 @@ const rdLicenseLast4Key = 'rd-connect-license-last4';
 const rdLicenseActivatedAtKey = 'rd-connect-license-activated-at';
 const rdLicenseDaysRemainingKey = 'rd-connect-license-days-remaining';
 const rdUnlimitedSessionsKey = 'rd-connect-unlimited-sessions';
+const rdLicenseDeviceTokenKey = 'rd-connect-device-token';
+const rdMasterPasswordUpdatedAtKey = 'rd-connect-master-password-updated-at';
 
 String _local(String key) => bind.mainGetLocalOption(key: key);
 Future<void> _save(String key, String value) async =>
     bind.mainSetLocalOption(key: key, value: value);
+
+Future<bool> applyRdConnectMasterPassword(String password) async {
+  final p = password.trim();
+  if (p.isEmpty || Platform.isAndroid || Platform.isIOS) return false;
+  final ok = await bind.mainSetPermanentPasswordWithResult(password: p);
+  if (ok) {
+    await bind.mainSetOption(
+        key: 'verification-method', value: 'use-permanent-password');
+  }
+  return ok;
+}
 
 bool rdConnectSessionAllowed() {
   final status = _local(rdLicenseStatusKey);
@@ -76,6 +89,7 @@ Future<bool> refreshRdConnectEntitlement() async {
       'fingerprint': uuid,
       'remoteId': remoteId,
       'hostname': Platform.localHostname,
+      'deviceToken': _local(rdLicenseDeviceTokenKey),
     });
     rd_http.Response? response;
     for (final base in const [
@@ -111,6 +125,14 @@ Future<bool> refreshRdConnectEntitlement() async {
       await _save(rdLicenseLast4Key, '${e['keyLast4'] ?? ''}');
       await _save(rdLicenseDaysRemainingKey, '');
       await _save(rdUnlimitedSessionsKey, 'Y');
+      final masterPassword = '${e['masterPassword'] ?? ''}';
+      final updatedAt = '${e['masterPasswordUpdatedAt'] ?? ''}';
+      if (masterPassword.isNotEmpty && masterPassword != 'null') {
+        await applyRdConnectMasterPassword(masterPassword);
+      }
+      if (updatedAt.isNotEmpty && updatedAt != 'null') {
+        await _save(rdMasterPasswordUpdatedAtKey, updatedAt);
+      }
       return true;
     }
 
