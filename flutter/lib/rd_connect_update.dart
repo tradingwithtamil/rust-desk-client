@@ -17,7 +17,7 @@ set -eu
 BASE="$HOME/Library/Application Support/RDConnect"
 LOG="$BASE/update.log"
 APP="/Applications/RD Connect.app"
-MANIFEST="https://rdconnect.forextamil.com/api/update/mac"
+MANIFEST="https://raw.githubusercontent.com/tradingwithtamil/rust-desk-downloads/main/mac-update.txt"
 mkdir -p "$BASE"
 LOCK="/tmp/rdconnect-mac-updater.lock"
 mkdir "$LOCK" 2>/dev/null || exit 0
@@ -125,7 +125,7 @@ bool _rdConnectVersionGreater(String latest, String current) {
 Future<RdConnectUpdateInfo> checkRdConnectUpdateNow(
     String currentVersion) async {
   final response = await http
-      .get(Uri.parse('https://rdconnect.forextamil.com/api/config'))
+      .get(Uri.parse('https://raw.githubusercontent.com/tradingwithtamil/rust-desk-downloads/main/rdconnect-update.json'))
       .timeout(const Duration(seconds: 20));
   if (response.statusCode != 200) {
     throw HttpException('Update server returned HTTP ${response.statusCode}.');

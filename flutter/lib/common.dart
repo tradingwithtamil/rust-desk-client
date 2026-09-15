@@ -4086,7 +4086,7 @@ void checkUpdate() {
   if (bind.isCustomClient()) {
     Timer(const Duration(seconds: 1), () async {
       try {
-        final res = await http.get(Uri.parse('https://rdconnect.forextamil.com/api/config'));
+        final res = await http.get(Uri.parse('https://raw.githubusercontent.com/tradingwithtamil/rust-desk-downloads/main/rdconnect-update.json'));
         if (res.statusCode != 200) return;
         final data = jsonDecode(res.body) as Map<String, dynamic>;
         String latest = '';

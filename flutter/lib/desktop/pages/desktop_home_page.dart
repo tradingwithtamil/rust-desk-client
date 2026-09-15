@@ -468,7 +468,7 @@ class _DesktopHomePageState extends State<DesktopHomePage>
           await rustDeskWinManager.closeAllSubWindows();
           await launchUrl(
             Uri.parse(
-                'https://rdconnect.forextamil.com/downloads/RD-Connect-Windows-latest.exe'),
+                'https://github.com/tradingwithtamil/rust-desk-downloads/releases/latest/download/RD-Connect-Windows-latest.exe'),
             mode: LaunchMode.externalApplication,
           );
         });
@@ -479,7 +479,7 @@ class _DesktopHomePageState extends State<DesktopHomePage>
           await rustDeskWinManager.closeAllSubWindows();
           await launchUrl(
             Uri.parse(
-                'https://rdconnect.forextamil.com/downloads/RD-Connect-Windows-latest.exe'),
+                'https://github.com/tradingwithtamil/rust-desk-downloads/releases/latest/download/RD-Connect-Windows-latest.exe'),
             mode: LaunchMode.externalApplication,
           );
         });
