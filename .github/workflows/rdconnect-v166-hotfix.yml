@@ -1,0 +1,107 @@
+name: RD Connect v1.6.6 Windows Hotfix
+
+on:
+  push:
+    branches: [rdconnect-v166-hotfix]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  SCITER_RUST_VERSION: "1.75"
+  LLVM_VERSION: "15.0.6"
+  FLUTTER_VERSION: "3.24.5"
+  VCPKG_COMMIT_ID: "120deac3062162151622ca4860575a33844ba10b"
+  VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
+  VERSION: "1.6.6"
+
+jobs:
+  build-windows-x64:
+    name: Windows x64 full hotfix
+    runs-on: windows-2022
+    steps:
+      - name: Export cache environment
+        uses: actions/github-script@d7906e4ad0b1822421a7e6a35d5ca353c962f410
+        with:
+          script: |
+            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
+            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          submodules: recursive
+      - name: Verify generated bridge
+        shell: bash
+        run: |
+          test -f src/bridge_generated.rs
+          test -f src/bridge_generated.io.rs
+          test -f flutter/lib/generated_bridge.dart
+          test -f flutter/lib/generated_bridge.freezed.dart
+      - name: Install LLVM
+        uses: KyleMayes/install-llvm-action@ebc0426251bc40c7cd31162802432c68818ab8f0
+        with:
+          version: ${{ env.LLVM_VERSION }}
+      - name: Install Flutter
+        uses: subosito/flutter-action@2783a3f08e1baf891508463f8c6653c258246225
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          architecture: x64
+      - name: Replace Flutter Windows engine
+        shell: pwsh
+        run: |
+          flutter precache --windows
+          Invoke-WebRequest -Uri https://github.com/rustdesk/engine/releases/download/main/windows-x64-release.zip -OutFile windows-x64-release.zip
+          Expand-Archive windows-x64-release.zip -DestinationPath windows-x64-release
+          Copy-Item -Path windows-x64-release/* -Destination C:/hostedtoolcache/windows/flutter/stable-${{ env.FLUTTER_VERSION }}-x64/bin/cache/artifacts/engine/windows-x64-release/ -Recurse -Force      - name: Patch Flutter
+        shell: bash
+        run: |
+          cp .github/patches/flutter_3.24.4_dropdown_menu_enableFilter.diff $(dirname $(dirname $(which flutter)))
+          cd $(dirname $(dirname $(which flutter)))
+          git apply flutter_3.24.4_dropdown_menu_enableFilter.diff
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9
+        with:
+          toolchain: ${{ env.SCITER_RUST_VERSION }}
+          targets: x86_64-pc-windows-msvc
+          components: rustfmt
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32
+        with:
+          prefix-key: rdconnect-v166-hotfix
+      - name: Setup vcpkg
+        uses: lukka/run-vcpkg@b1a0dd252f06b9e25b3c022a9a03bd7a427fb6a2
+        with:
+          vcpkgDirectory: C:\vcpkg
+          vcpkgGitCommitId: ${{ env.VCPKG_COMMIT_ID }}
+          doNotCache: false
+      - name: Install vcpkg dependencies
+        shell: bash
+        env:
+          VCPKG_DEFAULT_HOST_TRIPLET: x64-windows-static
+        run: |
+          $VCPKG_ROOT/vcpkg install --triplet x64-windows-static --x-install-root="$VCPKG_ROOT/installed"      - name: Build RD Connect
+        shell: pwsh
+        run: |
+          python3 .\build.py --portable --flutter --skip-portable-pack --hwcodec --vram
+          Move-Item ./flutter/build/windows/x64/runner/Release ./rustdesk
+      - name: Package full RD Connect release
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path ./dist | Out-Null
+          Copy-Item ./rustdesk ./rdconnect-stage -Recurse -Force
+          if (Test-Path ./rdconnect-stage/rustdesk.exe) {
+            Rename-Item ./rdconnect-stage/rustdesk.exe RDConnect.exe -Force
+          }
+          Compress-Archive -Path ./rdconnect-stage/* -DestinationPath ./dist/RD-Connect-Windows-v${{ env.VERSION }}-proper.zip -Force
+          Get-FileHash ./dist/RD-Connect-Windows-v${{ env.VERSION }}-proper.zip -Algorithm SHA256
+          Get-FileHash ./rdconnect-stage/RDConnect.exe -Algorithm SHA256
+          Get-FileHash ./rdconnect-stage/data/app.so -Algorithm SHA256
+      - name: Upload Windows hotfix
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: rd-connect-windows-v166-proper
+          path: |
+            dist/RD-Connect-Windows-v1.6.6-proper.zip
+            rdconnect-stage/RDConnect.exe
+            rdconnect-stage/flutter_windows.dll
+            rdconnect-stage/data/app.so
