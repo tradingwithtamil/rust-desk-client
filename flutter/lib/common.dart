@@ -67,7 +67,6 @@ int androidVersion = 0;
 
 bool rdConnectIsInstalled() {
   if (isWindows &&
-      bind.mainGetAppNameSync() == 'RD Connect' &&
       bind.mainGetLocalOption(key: 'rd-connect-installed') == 'Y') {
     return true;
   }
@@ -76,7 +75,6 @@ bool rdConnectIsInstalled() {
 
 bool rdConnectIsInstalledLowerVersion() {
   if (isWindows &&
-      bind.mainGetAppNameSync() == 'RD Connect' &&
       bind.mainGetLocalOption(key: 'rd-connect-installed') == 'Y') {
     return false;
   }
