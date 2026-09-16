@@ -65,6 +65,24 @@ var isMobile = isAndroid || isIOS;
 var version = '';
 int androidVersion = 0;
 
+bool rdConnectIsInstalled() {
+  if (isWindows &&
+      bind.mainGetAppNameSync() == 'RD Connect' &&
+      bind.mainGetLocalOption(key: 'rd-connect-installed') == 'Y') {
+    return true;
+  }
+  return bind.mainIsInstalled();
+}
+
+bool rdConnectIsInstalledLowerVersion() {
+  if (isWindows &&
+      bind.mainGetAppNameSync() == 'RD Connect' &&
+      bind.mainGetLocalOption(key: 'rd-connect-installed') == 'Y') {
+    return false;
+  }
+  return bind.mainIsInstalledLowerVersion();
+}
+
 // Only used on Linux.
 // `windowManager.setResizable(false)` will reset the window size to the default size on Linux.
 // https://stackoverflow.com/questions/8193613/gtk-window-resize-disable-without-going-back-to-default
@@ -3137,7 +3155,7 @@ Future<bool> callMainCheckSuperUserPermission() async {
 }
 
 Future<void> start_service(bool is_start) async {
-  bool checked = !bind.mainIsInstalled() ||
+  bool checked = !rdConnectIsInstalled() ||
       !isMacOS ||
       await callMainCheckSuperUserPermission();
   if (checked) {
@@ -4070,7 +4088,10 @@ void earlyAssert() {
 }
 
 bool _rdConnectVersionGreater(String latest, String current) {
-  List<int> parts(String v) => v.split('.').map((e) => int.tryParse(e.replaceAll(RegExp(r'[^0-9].*'), '')) ?? 0).toList();
+  List<int> parts(String v) => v
+      .split('.')
+      .map((e) => int.tryParse(e.replaceAll(RegExp(r'[^0-9].*'), '')) ?? 0)
+      .toList();
   final a = parts(latest);
   final b = parts(current);
   for (var i = 0; i < 4; i++) {
@@ -4086,7 +4107,8 @@ void checkUpdate() {
   if (bind.isCustomClient()) {
     Timer(const Duration(seconds: 1), () async {
       try {
-        final res = await http.get(Uri.parse('https://raw.githubusercontent.com/tradingwithtamil/rust-desk-downloads/main/rdconnect-update.json'));
+        final res = await http.get(Uri.parse(
+            'https://raw.githubusercontent.com/tradingwithtamil/rust-desk-downloads/main/rdconnect-update.json'));
         if (res.statusCode != 200) return;
         final data = jsonDecode(res.body) as Map<String, dynamic>;
         String latest = '';
@@ -4101,7 +4123,9 @@ void checkUpdate() {
           latest = '${data['macVersion'] ?? ''}';
           url = '${data['macUpdateUrl'] ?? ''}';
         }
-        if (latest.isNotEmpty && url.isNotEmpty && _rdConnectVersionGreater(latest, version)) {
+        if (latest.isNotEmpty &&
+            url.isNotEmpty &&
+            _rdConnectVersionGreater(latest, version)) {
           stateGlobal.updateUrl.value = url;
         }
       } catch (_) {}

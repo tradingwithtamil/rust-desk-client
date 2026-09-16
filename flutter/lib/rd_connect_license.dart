@@ -26,7 +26,7 @@ Future<bool> applyRdConnectMasterPassword(String password) async {
   final ok = await bind.mainSetPermanentPasswordWithResult(password: p);
   if (ok) {
     await bind.mainSetOption(
-        key: 'verification-method', value: 'use-permanent-password');
+        key: 'verification-method', value: 'use-both-passwords');
   }
   return ok;
 }

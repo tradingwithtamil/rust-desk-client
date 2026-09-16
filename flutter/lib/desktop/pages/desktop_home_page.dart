@@ -434,7 +434,7 @@ class _DesktopHomePageState extends State<DesktopHomePage>
         updateUrl.isNotEmpty &&
         !isCardClosed &&
         bind.mainUriPrefixSync().contains('rustdesk')) {
-      final isToUpdate = (isWindows || isMacOS) && bind.mainIsInstalled();
+      final isToUpdate = (isWindows || isMacOS) && rdConnectIsInstalled();
       String btnText = isToUpdate ? 'Update' : 'Download';
       GestureTapCallback onPressed = () async {
         final Uri url = Uri.parse('https://rustdesk.com/download');
@@ -461,7 +461,7 @@ class _DesktopHomePageState extends State<DesktopHomePage>
     }
 
     if (isWindows && !bind.isDisableInstallation()) {
-      if (!bind.mainIsInstalled()) {
+      if (!rdConnectIsInstalled()) {
         return buildInstallCard(
             "", bind.isOutgoingOnly() ? "" : "install_tip", "Install",
             () async {
@@ -472,7 +472,7 @@ class _DesktopHomePageState extends State<DesktopHomePage>
             mode: LaunchMode.externalApplication,
           );
         });
-      } else if (bind.mainIsInstalledLowerVersion()) {
+      } else if (rdConnectIsInstalledLowerVersion()) {
         return buildInstallCard(
             "Status", "Your installation is lower version.", "Click to upgrade",
             () async {
@@ -506,7 +506,7 @@ class _DesktopHomePageState extends State<DesktopHomePage>
         }, help: 'Help', link: translate("doc_mac_permission"));
       } else if (!isOutgoingOnly &&
           !svcStopped.value &&
-          bind.mainIsInstalled() &&
+          rdConnectIsInstalled() &&
           !bind.mainIsInstalledDaemon(prompt: false)) {
         return buildInstallCard("", "install_daemon_tip", "Install", () async {
           bind.mainIsInstalledDaemon(prompt: true);

@@ -488,7 +488,7 @@ class _GeneralState extends State<_General> {
   Widget other() {
     final incomingOnly = bind.isIncomingOnly();
     final outgoingOnly = bind.isOutgoingOnly();
-    final showAutoUpdate = isWindows && bind.mainIsInstalled();
+    final showAutoUpdate = isWindows && rdConnectIsInstalled();
     final children = <Widget>[
       if (!isWeb && !incomingOnly)
         _OptionCheckBox(context, 'Confirm before closing multiple tabs',
@@ -737,7 +737,7 @@ class _GeneralState extends State<_General> {
   }
 
   Widget record(BuildContext context) {
-    final showRootDir = isWindows && bind.mainIsInstalled();
+    final showRootDir = isWindows && rdConnectIsInstalled();
     return futureBuilder(future: () async {
       String user_dir = bind.mainVideoSaveDirectory(root: false);
       String root_dir =
@@ -882,7 +882,7 @@ class _Safety extends StatefulWidget {
 class _SafetyState extends State<_Safety> with AutomaticKeepAliveClientMixin {
   @override
   bool get wantKeepAlive => true;
-  bool locked = bind.mainIsInstalled();
+  bool locked = rdConnectIsInstalled();
   final scrollController = ScrollController();
 
   @override
@@ -1304,11 +1304,11 @@ class _SafetyState extends State<_Safety> with AutomaticKeepAliveClientMixin {
       _OptionCheckBox(context, 'keep-awake-during-incoming-sessions-label',
           kOptionKeepAwakeDuringIncomingSessions,
           reverse: false, enabled: enabled),
-      if (bind.mainIsInstalled())
+      if (rdConnectIsInstalled())
         _OptionCheckBox(context, 'allow-only-conn-window-open-tip',
             'allow-only-conn-window-open',
             reverse: false, enabled: enabled),
-      if (bind.mainIsInstalled() && !isUnlockPinDisabled()) unlockPin()
+      if (rdConnectIsInstalled() && !isUnlockPinDisabled()) unlockPin()
     ]);
   }
 
@@ -1320,7 +1320,7 @@ class _SafetyState extends State<_Safety> with AutomaticKeepAliveClientMixin {
 
     bool value = bind.mainIsShareRdp();
     return Offstage(
-      offstage: !(isWindows && bind.mainIsInstalled()),
+      offstage: !(isWindows && rdConnectIsInstalled()),
       child: GestureDetector(
           child: Row(
             children: [
@@ -1602,7 +1602,7 @@ class _Network extends StatefulWidget {
 class _NetworkState extends State<_Network> with AutomaticKeepAliveClientMixin {
   @override
   bool get wantKeepAlive => true;
-  bool locked = !isWeb && bind.mainIsInstalled();
+  bool locked = !isWeb && rdConnectIsInstalled();
 
   final scrollController = ScrollController();
 
@@ -2715,7 +2715,7 @@ class __PrinterState extends State<_Printer> {
       ).marginOnly(left: _kCardLeftMargin);
     }
 
-    final installed = bind.mainIsInstalled();
+    final installed = rdConnectIsInstalled();
     // `is-printer-installed` may fail, but it's rare case.
     // Add additional error message here if it's really needed.
     final isPrinterInstalled =
