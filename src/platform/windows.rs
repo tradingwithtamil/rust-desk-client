@@ -1430,7 +1430,17 @@ fn get_install_info_with_subkey(subkey: String) -> (String, String, String, Stri
         "%ProgramData%\\Microsoft\\Windows\\Start Menu\\Programs\\{}",
         crate::get_app_name()
     );
-    let exe = format!("{}\\{}.exe", path, crate::get_app_name());
+    let mut exe = format!("{}\\{}.exe", path, crate::get_app_name());
+    if !std::path::Path::new(&exe).exists() {
+        // RD Connect is branded with a spaced display name but ships as RDConnect.exe.
+        // Resolve the compact executable name so installed builds are not misclassified
+        // as portable, which would start the non-elevated portable-service path.
+        let compact_name = crate::get_app_name().replace(' ', "");
+        let compact_exe = format!("{}\\{}.exe", path, compact_name);
+        if std::path::Path::new(&compact_exe).exists() {
+            exe = compact_exe;
+        }
+    }
     (subkey, path, start_menu, exe)
 }
 
