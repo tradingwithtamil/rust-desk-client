@@ -1958,7 +1958,22 @@ pub fn add_recent_document(path: &str) {
 
 pub fn is_installed() -> bool {
     let (_, _, _, exe) = get_install_info();
-    std::fs::metadata(exe).is_ok()
+    if std::fs::metadata(&exe).is_ok() {
+        return true;
+    }
+
+    // RD Connect uses a branded install directory and executable name on Windows.
+    // Older installers may not have written the upstream uninstall marker, so accept
+    // the actual installed RD Connect binaries as a safe fallback.
+    if let Ok(program_files) = std::env::var("ProgramFiles") {
+        let install_dir = std::path::Path::new(&program_files).join("RD Connect");
+        for name in ["RDConnect.exe", "RD Connect.exe", "RustDesk.exe"] {
+            if install_dir.join(name).is_file() {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 pub fn get_reg(name: &str) -> String {
