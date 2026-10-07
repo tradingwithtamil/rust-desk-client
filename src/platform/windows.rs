@@ -2424,6 +2424,34 @@ pub fn run_uac(exe: &str, arg: &str) -> ResultType<bool> {
     }
 }
 
+pub fn ensure_rd_connect_firewall_rules() {
+    let Ok(exe) = std::env::current_exe() else {
+        return;
+    };
+    let exe = exe.to_string_lossy().to_string();
+    let app_name = crate::get_app_name();
+    for (direction, suffix) in [("in", "Inbound"), ("out", "Outbound")] {
+        let name = format!("{app_name} Direct {suffix}");
+        let status = std::process::Command::new("netsh")
+            .args([
+                "advfirewall",
+                "firewall",
+                "add",
+                "rule",
+                &format!("name={name}"),
+                &format!("dir={direction}"),
+                "action=allow",
+                &format!("program={exe}"),
+                "enable=yes",
+                "profile=any",
+            ])
+            .status();
+        if let Err(err) = status {
+            log::warn!("Failed to ensure firewall rule {name}: {err}");
+        }
+    }
+}
+
 pub fn check_super_user_permission() -> ResultType<bool> {
     run_uac(
         std::env::current_exe()?
