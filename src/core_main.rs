@@ -10,6 +10,18 @@ use hbb_common::{config, log};
 #[cfg(windows)]
 use tauri_winrt_notification::{Duration, Sound, Toast};
 
+fn apply_rd_connect_performance_defaults() {
+    for (key, value) in [
+        ("enable-hwcodec", "Y"),
+        ("enable-lan-discovery", "Y"),
+        ("av1-test", "N"),
+    ] {
+        if config::Config::get_option(key).is_empty() {
+            config::Config::set_option(key.to_owned(), value.to_owned());
+        }
+    }
+}
+
 #[macro_export]
 macro_rules! my_println{
     ($($arg:tt)*) => {
@@ -33,6 +45,7 @@ pub fn core_main() -> Option<Vec<String>> {
         return None;
     }
     crate::load_custom_client();
+    apply_rd_connect_performance_defaults();
     #[cfg(windows)]
     if !crate::platform::windows::bootstrap() {
         // return None to terminate the process
