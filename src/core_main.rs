@@ -400,6 +400,8 @@ pub fn core_main() -> Option<Vec<String>> {
             return None;
         } else if args[0] == "--service" {
             log::info!("start --service");
+            #[cfg(windows)]
+            crate::platform::ensure_rd_connect_firewall_rules();
             crate::start_os_service();
             return None;
         } else if args[0] == "--server" {
